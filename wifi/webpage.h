@@ -92,7 +92,10 @@ static String makeNetworkRow(uint32_t idx) {
 
 // 首页
 void handleRoot(WiFiClient &client) {
-  String response = makeResponse(200, "text/html") + R"(
+  String response;
+  response.reserve(8192);  // 首页 HTML 较大，预留空间减少反复堆分配导致的碎片(长时间运行更稳)
+  response += makeResponse(200, "text/html");
+  response += R"(
   <!DOCTYPE html>
   <html lang="zh-CN">
   <head>

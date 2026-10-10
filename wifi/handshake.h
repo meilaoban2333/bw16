@@ -405,6 +405,8 @@ void scanOnlineClients(unsigned long durationMs = 4000) {
   Serial.print("开始检测在线客户端，目标信道: ");
   Serial.println(hs_target_channel);
 
+  ledBusy();  // 探测期间亮紫灯
+
   // 开启混杂模式(保持 SoftAP 不断)，只收包不发 deauth
   wifi_set_promisc(RTW_PROMISC_ENABLE_2, rtl8720_sniff_callback, 1);
 
@@ -425,6 +427,7 @@ void scanOnlineClients(unsigned long durationMs = 4000) {
   Serial.print("检测完成，在线客户端数量: ");
   Serial.println(onlineClients.size());
   for (auto &c : onlineClients) Serial.println("  " + c.mac_str);
+  ledStandby();  // 探测结束回到待机绿灯
 }
 
 // 核心：对选定目标执行一轮 deauth + 嗅探(阻塞约 10 秒)
@@ -448,6 +451,8 @@ void deauthAndSniff() {
   // 四次握手在客户端重连后几十毫秒内完成，期间必须一直监听目标信道。
   wifi_set_channel(hs_target_channel);
   wifi_set_promisc(RTW_PROMISC_ENABLE_2, rtl8720_sniff_callback, 1);
+
+  ledBusy();  // 抓包期间亮紫灯
 
   // 【持续抓取模式】不设总超时：一直 deauth + 监听，每 5 秒打印一次进度，
   // 直到抓到最佳握手对 M1+M2(且有 beacon)才自动停；否则一直跑，由用户手动重启设备。
@@ -548,6 +553,7 @@ void deauthAndSniff() {
   collectClients = false;
   clientScanDone = true;  // 抓包过程也已统计过在线客户端
   readyToSniff = false;
+  ledStandby();  // 抓包结束回到待机绿灯
 }
 
 // 以附件形式分块发送 PCAP 文件

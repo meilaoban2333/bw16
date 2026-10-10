@@ -59,6 +59,28 @@ int frames_per_deauth = 5;   // 每次对单个目标发送的帧数
 int send_delay = 5;          // 每轮之间的延时(毫秒)
 bool isDeauthing = false;    // 是否正在执行攻击
 
+// ====================== RGB 彩灯状态提醒 ======================
+// BW16 板载 RGB 灯(AmebaD 提供 LED_R/LED_G/LED_B 引脚宏)。
+// 约定：待机=绿灯常亮；抓包/探测/攻击=紫灯(红+蓝)。
+// 设为 static inline，供 handshake.h 等后续包含的文件直接调用。
+static inline void ledInit() {
+  pinMode(LED_R, OUTPUT);
+  pinMode(LED_G, OUTPUT);
+  pinMode(LED_B, OUTPUT);
+}
+// 绿灯(待机)：只亮绿
+static inline void ledStandby() {
+  digitalWrite(LED_R, LOW);
+  digitalWrite(LED_G, HIGH);
+  digitalWrite(LED_B, LOW);
+}
+// 紫灯(忙碌：抓包/探测/攻击)：红+蓝同亮
+static inline void ledBusy() {
+  digitalWrite(LED_R, HIGH);
+  digitalWrite(LED_G, LOW);
+  digitalWrite(LED_B, HIGH);
+}
+
 // ====================== 握手抓取模块 ======================
 // 握手模块需要先知道上面的结构与变量，故在其后包含
 #include "handshake.h"
@@ -158,6 +180,9 @@ String makeRedirect(String url) {
 void setup() {
   Serial.begin(115200);
 
+  ledInit();
+  ledStandby();  // 开机即进入待机绿灯
+
   // 启动 SoftAP 热点
   WiFi.apbegin(ap_ssid, ap_pass, (char *)String(ap_channel).c_str());
   Serial.println("热点已启动: " + String(ap_ssid));
@@ -175,9 +200,16 @@ void loop() {
   WiFiClient client = server.available();
   if (client.connected()) {
     String request;
-    while (client.available()) {
+    request.reserve(512);  // 预分配，减少拼接时的反复堆分配/碎片
+    // 读取请求，但限制最大长度：防止异常/恶意的超大请求撑爆堆内存(长时间运行安全)
+    const int MAX_REQUEST = 2048;
+    int readCount = 0;
+    while (client.available() && readCount < MAX_REQUEST) {
       request += (char)client.read();
+      readCount++;
     }
+    // 若请求超限，丢弃剩余字节，避免滞留
+    while (client.available()) client.read();
     String path = parseRequest(request);
 
     if (path == "/") {
